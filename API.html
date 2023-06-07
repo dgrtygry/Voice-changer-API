@@ -1,148 +1,27 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Tick Studio's Voice Changer</title>
-  <style>
-    body {
-      background: linear-gradient(to bottom, orange, yellow);
-    }
-    
-    .footer {
-      text-align: center;
-      padding: 10px;
-      background: white;
-      color: gray;
-    }
-  </style>
-</head>
-<body>
-  <h1>Tick Studio's Voice Changer</h1>
+@echo off
+setlocal enabledelayedexpansion
 
-  <div>
-    <button onclick="startRecording()">Start Recording</button>
-    <button onclick="stopRecording()">Stop Recording</button>
-    <button onclick="playAudio()">Play Audio</button>
-    <button onclick="saveAudio()">Save Audio</button>
-    <select id="pitchSelect">
-      <option value="1">Normal</option>
-      <option value="1.5">High</option>
-      <option value="0.5">Low</option>
-    </select>
-    <select id="effectSelect">
-      <option value="none">No Effect</option>
-      <option value="delay">Delay</option>
-      <option value="reverb">Reverb</option>
-    </select>
-  </div>
+REM Define variables
+set "audioFile=output.wav"
+set "pitchValue=1"
+set "effectValue=none"
+set "delayTime=0.3"
 
-  <script>
-    let audioStream;
-    let recordedChunks = [];
+REM Start recording
+echo Starting recording...
+ffmpeg -y -f dshow -i audio="virtual-audio-capturer" -t 10 "%audioFile%"
 
-    function startRecording() {
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(function (stream) {
-          audioStream = stream;
-          const mediaRecorder = new MediaRecorder(stream);
-          mediaRecorder.start();
+REM Apply pitch and effects
+echo Applying pitch and effects...
+ffmpeg -y -i "%audioFile%" -af "asetrate=44100*%pitchValue%,aecho=0.8:0.9:1000:0.3" "modified_%audioFile%"
 
-          mediaRecorder.addEventListener('dataavailable', function (e) {
-            recordedChunks.push(e.data);
-          });
+REM Play modified audio
+echo Playing modified audio...
+start "modified_%audioFile%"
 
-          mediaRecorder.addEventListener('stop', function () {
-            const recordedBlob = new Blob(recordedChunks, { type: 'audio/wav' });
-            recordedChunks = [];
+REM Clean up
+echo Cleaning up...
+del "%audioFile%"
 
-            const audioURL = URL.createObjectURL(recordedBlob);
-            const audioElement = document.createElement('audio');
-            audioElement.src = audioURL;
-            audioElement.controls = true;
-            document.body.appendChild(audioElement);
-
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const source = audioContext.createMediaElementSource(audioElement);
-            const processor = audioContext.createScriptProcessor(1024, 1, 1);
-            const pitchSelect = document.getElementById('pitchSelect');
-            const effectSelect = document.getElementById('effectSelect');
-            const pitchValue = parseFloat(pitchSelect.value);
-            const effectValue = effectSelect.value;
-            
-            source.connect(processor);
-            processor.connect(audioContext.destination);
-
-            processor.onaudioprocess = function (e) {
-              const inputBuffer = e.inputBuffer;
-              const outputBuffer = e.outputBuffer;
-
-              for (let channel = 0; channel < outputBuffer.numberOfChannels; channel++) {
-                const inputData = inputBuffer.getChannelData(channel);
-                const outputData = outputBuffer.getChannelData(channel);
-
-                // Change pitch
-                for (let i = 0; i < inputBuffer.length; i++) {
-                  outputData[i] = inputData[i] * pitchValue;
-                }
-
-                // Apply effects
-                if (effectValue === 'delay') {
-                  const delayTime = 0.3; // Delay time in seconds
-                  const delaySamples = Math.floor(delayTime * audioContext.sampleRate);
-                  for (let i = delaySamples; i < inputBuffer.length; i++) {
-                    outputData[i] += inputData[i - delaySamples] * 0.5; // Add delayed audio
-                  }
-                } else if (effectValue === 'reverb') {
-                  const convolver = audioContext.createConvolver();
-                  // Apply reverb impulse response here
-                  // For example, you can load an impulse response file using XMLHttpRequest and assign it to convolver.buffer
-                  source.disconnect();
-                  source.connect(convolver);
-                  convolver.connect(processor);
-                  processor.connect(audioContext.destination);
-                }
-              }
-            };
-
-            audioElement.play();
-          });
-        })
-        .catch(function (err) {
-          console.error('Error accessing microphone:', err);
-        });
-    }
-
-    function stopRecording() {
-      audioStream.getTracks().forEach(function (track) {
-        track.stop();
-      });
-    }
-
-    function playAudio() {
-      const audioElement = document.querySelector('audio');
-      if (audioElement) {
-        audioElement.play();
-      }
-    }
-
-    function saveAudio() {
-      const audioElement = document.querySelector('audio');
-      if (audioElement) {
-        const blob = new Blob(recordedChunks, { type: 'audio/wav' });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'modified_audio.wav';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
-    }
-  </script>
-  
-  <div class="footer">
-    <p>Copyright 2015-2023 and beyond. Tick Studios.</p>
-  </div>
-</body>
-</html>
+echo Done.
+pause
